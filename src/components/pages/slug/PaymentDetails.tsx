@@ -253,15 +253,20 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                 ) : (
                                     <PayPalScriptProvider options={{
                                         clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
-                                        currency: "USD"
+                                        currency: "USD",
+                                        intent: "capture",
+                                        components: "buttons",
+                                        'disable-funding': 'paylater,credit',
+                                        'enable-funding': 'card'
                                     }}>
                                         <PayPalButtons
                                             style={{
                                                 layout: "vertical",
                                                 color: "blue",
                                                 shape: "pill",
-                                                label: "pay"
+                                                label: "paypal"
                                             }}
+                                            fundingSource="paypal"
                                             createOrder={(data, actions) => {
                                                 return actions.order.create({
                                                     intent: "CAPTURE",
@@ -269,8 +274,22 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                                         description: payment.title,
                                                         amount: {
                                                             currency_code: "USD",
-                                                            value: usdAmount
-                                                        }
+                                                            value: usdAmount,
+                                                            breakdown: {
+                                                                item_total: {
+                                                                    currency_code: "USD",
+                                                                    value: usdAmount
+                                                                }
+                                                            }
+                                                        },
+                                                        items: [{
+                                                            name: payment.title,
+                                                            unit_amount: {
+                                                                currency_code: "USD",
+                                                                value: usdAmount
+                                                            },
+                                                            quantity: "1"
+                                                        }]
                                                     }]
                                                 });
                                             }}

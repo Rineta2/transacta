@@ -255,18 +255,17 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                         clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
                                         currency: "USD",
                                         intent: "capture",
-                                        components: "buttons",
-                                        'disable-funding': 'paylater,credit',
-                                        'enable-funding': 'card'
+                                        'enable-funding': 'card,credit',
+                                        'disable-funding': 'paylater,venmo',
+                                        'merchant-id': process.env.NEXT_PUBLIC_PAYPAL_MERCHANT_ID,
                                     }}>
                                         <PayPalButtons
                                             style={{
                                                 layout: "vertical",
                                                 color: "blue",
                                                 shape: "pill",
-                                                label: "paypal"
+                                                label: "pay"
                                             }}
-                                            fundingSource="paypal"
                                             createOrder={(data, actions) => {
                                                 return actions.order.create({
                                                     intent: "CAPTURE",
@@ -274,23 +273,15 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                                         description: payment.title,
                                                         amount: {
                                                             currency_code: "USD",
-                                                            value: usdAmount,
-                                                            breakdown: {
-                                                                item_total: {
-                                                                    currency_code: "USD",
-                                                                    value: usdAmount
-                                                                }
-                                                            }
+                                                            value: usdAmount
                                                         },
-                                                        items: [{
-                                                            name: payment.title,
-                                                            unit_amount: {
-                                                                currency_code: "USD",
-                                                                value: usdAmount
-                                                            },
-                                                            quantity: "1"
-                                                        }]
-                                                    }]
+                                                        payee: {
+                                                            merchant_id: process.env.NEXT_PUBLIC_PAYPAL_MERCHANT_ID
+                                                        }
+                                                    }],
+                                                    application_context: {
+                                                        shipping_preference: 'NO_SHIPPING'
+                                                    }
                                                 });
                                             }}
                                             onApprove={async (data, actions) => {

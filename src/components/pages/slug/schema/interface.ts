@@ -2,21 +2,21 @@ export interface PayPalOrderData {
   id: string;
   status: string;
   payer: {
-    email_address?: string;
-    payer_id?: string;
+    payer_id: string;
+    email_address: string;
   };
   purchase_units: Array<{
     amount: {
       value: string;
       currency_code: string;
     };
+    reference_id?: string;
   }>;
-  create_time?: string;
-  update_time?: string;
   payment_source?: {
     card?: {
-      last_digits: string;
-      brand: string;
+      last_digits?: string;
+      brand?: string;
+      name?: string;
     };
     paypal?: {
       email_address: string;

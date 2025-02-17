@@ -16,23 +16,43 @@ import ProductNotFound from '@/components/pages/slug/PaymentNotFound'
 
 import Image from 'next/image'
 
+import { Payment } from '@/components/pages/slug/schema/interface'
+
 import { toast } from 'react-hot-toast'
-
-import { useRouter } from 'next/navigation'
-
-import { db } from '@/utils/firebase'
-
-import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
-
-import { PayPalOrderData, Payment } from '@/components/pages/slug/schema/interface'
 
 import Link from 'next/link'
 
+import { OnApproveData } from "@paypal/paypal-js"
+
 export default function PaymentDetails({ slug }: { slug: string }) {
     const { payments, loading } = useFetchPayments()
-    const router = useRouter()
     const [currentTime, setCurrentTime] = useState(new Date())
     const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false)
+
+    const handlePaypalPayment = async (details: OnApproveData) => {
+        try {
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: details.orderID,
+                    payerId: details.payerID,
+                    productTitle: payment?.title,
+                    productSlug: payment?.slug,
+                    amountUSD: usdAmount,
+                    amountIDR: payment?.priceIdr,
+                    status: "COMPLETED",
+                    paymentMethod: 'PayPal',
+                    paymentDetails: details,
+                })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message);
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            toast.error('Payment processing failed');
+        }
+    };
 
     const getRemainingTime = (payment: Payment) => {
         const startDate = new Date(payment.date);
@@ -93,56 +113,6 @@ export default function PaymentDetails({ slug }: { slug: string }) {
     if (!payment) {
         return <ProductNotFound />
     }
-
-    const handlePaypalPayment = async (order: PayPalOrderData) => {
-        try {
-            const paymentStatus = order.status === "COMPLETED" ? "COMPLETED" : "failed";
-            const baseUrl = process.env.NEXT_PUBLIC_URL as string;
-            const successUrl = `${baseUrl}/payment/success/${order.id}`;
-            const failureUrl = `${baseUrl}/payment/failed/${order.id}`;
-
-            // Menentukan metode pembayaran berdasarkan payment_source
-            let paymentMethod = 'PayPal';
-            if (order.payment_source?.card) {
-                paymentMethod = `${order.payment_source.card.brand} Card`;
-            } else if (order.payment_source?.paypal) {
-                paymentMethod = 'PayPal';
-            }
-
-            const transactionData = {
-                orderId: order.id,
-                payerId: order.payer.payer_id,
-                payerEmail: order.payer.email_address,
-                productTitle: payment.title,
-                productSlug: payment.slug,
-                amountUSD: order.purchase_units[0].amount.value,
-                amountIDR: payment.priceIdr,
-                status: paymentStatus,
-                paymentMethod: paymentMethod,
-                createdAt: serverTimestamp(),
-                paymentDetails: order,
-                ...(paymentStatus === "COMPLETED" ? { successUrl } : { failureUrl })
-            };
-
-            // Simpan ke koleksi 'transactions'
-            const docRef = await addDoc(collection(db, process.env.NEXT_PUBLIC_COLLECTIONS_TRANSACTIONS as string), transactionData);
-            console.log("Transaction saved with ID:", docRef.id);
-
-            if (paymentStatus === "COMPLETED") {
-                console.log("Payment successful!", order);
-                toast.success('Payment successful!');
-                router.push(successUrl);
-            } else {
-                console.error("Payment failed:", order);
-                toast.error('Payment failed. Please try again.');
-                router.push(failureUrl);
-            }
-        } catch (error) {
-            console.error("Error saving transaction:", error);
-            toast.error('Payment failed. Please try again.');
-            router.push(`${process.env.NEXT_PUBLIC_URL}/payment/failed`);
-        }
-    };
 
     const usdAmount = (payment.priceUsd).toFixed(2);
 
@@ -251,80 +221,60 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                         Payment Period Expired
                                     </button>
                                 ) : (
-                                    <PayPalScriptProvider options={{
-                                        clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
-                                        currency: "USD",
-                                        intent: "capture",
-                                        'enable-funding': 'card,credit',
-                                        'disable-funding': 'paylater,venmo',
-                                        'merchant-id': process.env.NEXT_PUBLIC_PAYPAL_MERCHANT_ID,
-                                    }}>
-                                        <PayPalButtons
-                                            style={{
-                                                layout: "vertical",
-                                                color: "blue",
-                                                shape: "pill",
-                                                label: "pay"
-                                            }}
-                                            createOrder={(data, actions) => {
-                                                return actions.order.create({
-                                                    intent: "CAPTURE",
-                                                    purchase_units: [{
-                                                        description: payment.title,
-                                                        amount: {
-                                                            currency_code: "USD",
-                                                            value: usdAmount
-                                                        },
-                                                        payee: {
-                                                            merchant_id: process.env.NEXT_PUBLIC_PAYPAL_MERCHANT_ID
+                                    <PayPalScriptProvider
+                                        options={{
+                                            clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
+                                            currency: "USD",
+                                            intent: "capture",
+                                            enableFunding: "card",
+                                            disableFunding: "paylater"
+                                        }}
+                                    >
+                                        <div className="mt-4">
+                                            {payment && getRemainingTime(payment).status !== 'expired' ? (
+                                                <PayPalButtons
+                                                    style={{
+                                                        layout: "vertical",
+                                                        shape: "rect",
+                                                        color: "gold"
+                                                    }}
+                                                    createOrder={(data, actions) => {
+                                                        return actions.order.create({
+                                                            intent: "CAPTURE",
+                                                            application_context: {
+                                                                return_url: `${process.env.NEXT_PUBLIC_URL}/payment/success`,
+                                                                cancel_url: `${process.env.NEXT_PUBLIC_URL}/payment/cancel`
+                                                            },
+                                                            purchase_units: [{
+                                                                amount: {
+                                                                    value: usdAmount,
+                                                                    currency_code: "USD"
+                                                                },
+                                                                description: payment.title
+                                                            }]
+                                                        });
+                                                    }}
+                                                    onApprove={async (data, actions) => {
+                                                        if (!actions.order) return;
+                                                        try {
+                                                            const details = await actions.order.capture();
+                                                            console.log('Transaction completed:', details);
+                                                            if (details.status === "COMPLETED") {
+                                                                toast.success('Payment successful!');
+                                                                await handlePaypalPayment(data);
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Payment failed:', error);
+                                                            toast.error('Payment failed. Please try again.');
                                                         }
-                                                    }],
-                                                    application_context: {
-                                                        shipping_preference: 'NO_SHIPPING'
-                                                    }
-                                                });
-                                            }}
-                                            onApprove={async (data, actions) => {
-                                                if (actions.order) {
-                                                    const order = await actions.order.capture();
-                                                    handlePaypalPayment(order as PayPalOrderData);
-                                                }
-                                            }}
-                                            onError={(err) => {
-                                                console.error("PayPal Error:", err);
-                                                toast.error('PayPal payment failed. Please try again.');
-                                                router.push('/payment/failed');
-                                            }}
-                                            onCancel={async () => {
-                                                try {
-                                                    const baseUrl = process.env.NEXT_PUBLIC_URL as string;
-                                                    const cancelOrderId = `CANCEL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                                    const cancelUrl = `${baseUrl}/payment/failed/${cancelOrderId}`;
-
-                                                    const transactionData = {
-                                                        orderId: cancelOrderId,
-                                                        productTitle: payment.title,
-                                                        productSlug: payment.slug,
-                                                        amountUSD: usdAmount,
-                                                        amountIDR: payment.priceIdr,
-                                                        status: "cancelled",
-                                                        paymentMethod: 'PayPal',
-                                                        createdAt: serverTimestamp() as Timestamp,
-                                                        cancelUrl: cancelUrl
-                                                    };
-
-                                                    const docRef = await addDoc(collection(db, 'transactions'), transactionData);
-
-                                                    console.log("Cancelled transaction saved with ID:", docRef.id);
-                                                    toast.error('Payment cancelled');
-                                                    router.push(cancelUrl);
-                                                } catch (error) {
-                                                    console.error("Error saving cancelled transaction:", error);
-                                                    toast.error('Error recording cancelled payment');
-                                                    router.push(`${process.env.NEXT_PUBLIC_URL}/payment/failed`);
-                                                }
-                                            }}
-                                        />
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div className="text-red-500">
+                                                    Payment period has expired
+                                                </div>
+                                            )}
+                                        </div>
                                     </PayPalScriptProvider>
                                 )}
                             </div>

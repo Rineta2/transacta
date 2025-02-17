@@ -10,12 +10,9 @@ import Footer from "@/components/footer/Footer";
 
 import { Toaster } from "react-hot-toast";
 
-import Script from "next/script";
-
 const Pathname = ({ children }: { children: React.ReactNode }) => {
     const pathname = usePathname();
 
-    // Check for all dashboard/admin routes
     const isAdminRoute = pathname?.includes("/super-admins") ||
         pathname?.includes("/admins") ||
         pathname?.includes("/auth") ||
@@ -23,30 +20,8 @@ const Pathname = ({ children }: { children: React.ReactNode }) => {
         pathname?.includes("/transaction/pending") ||
         pathname?.includes("/transaction/success") || false;
 
-    const isPaymentRoute = pathname?.includes("/payment");
-
-    const paypalScriptUrl = `https://www.paypal.com/sdk/js` +
-        `?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}` +
-        `&currency=USD` +
-        `&intent=capture` +
-        `&components=buttons` +
-        `&enable-funding=card` +
-        `&disable-funding=paylater`;
-
     return (
         <main>
-            {isPaymentRoute && (
-                <Script
-                    src={paypalScriptUrl}
-                    strategy="afterInteractive"
-                    onLoad={() => {
-                        console.log('PayPal script loaded successfully');
-                    }}
-                    onError={(e) => {
-                        console.error('PayPal script failed to load:', e);
-                    }}
-                />
-            )}
             <Toaster
                 position="top-center"
                 toastOptions={{

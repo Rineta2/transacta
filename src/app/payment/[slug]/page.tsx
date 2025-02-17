@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-import PaymentDetails from '@/components/pages/slug/PaymentDetails'
+import PaymentDetails from '@/components/pages/payment/slug/PaymentDetails'
 
 import { generateMetadata as getPaymentMetadata } from '@/components/helper/metadata'
 

@@ -22,37 +22,12 @@ import { toast } from 'react-hot-toast'
 
 import Link from 'next/link'
 
-import { OnApproveData } from "@paypal/paypal-js"
+import { OnApproveData } from "@paypal/paypal-js";
 
 export default function PaymentDetails({ slug }: { slug: string }) {
     const { payments, loading } = useFetchPayments()
     const [currentTime, setCurrentTime] = useState(new Date())
     const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false)
-
-    const handlePaypalPayment = async (details: OnApproveData) => {
-        try {
-            const response = await fetch('/api/transactions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    orderId: details.orderID,
-                    payerId: details.payerID,
-                    productTitle: payment?.title,
-                    productSlug: payment?.slug,
-                    amountUSD: usdAmount,
-                    amountIDR: payment?.priceIdr,
-                    status: "COMPLETED",
-                    paymentMethod: 'PayPal',
-                    paymentDetails: details,
-                })
-            });
-            const result = await response.json();
-            if (!result.success) throw new Error(result.message);
-        } catch (error) {
-            console.error('Error processing payment:', error);
-            toast.error('Payment processing failed');
-        }
-    };
 
     const getRemainingTime = (payment: Payment) => {
         const startDate = new Date(payment.date);
@@ -119,6 +94,31 @@ export default function PaymentDetails({ slug }: { slug: string }) {
     const handleExpiredPaymentClick = () => {
         setIsExpiredModalOpen(true)
     }
+
+    const handlePaypalPayment = async (data: OnApproveData) => {
+        try {
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: data.orderID,
+                    payerId: data.payerID,
+                    productTitle: payment?.title,
+                    productSlug: payment?.slug,
+                    amountUSD: usdAmount,
+                    amountIDR: payment?.priceIdr,
+                    status: "COMPLETED",
+                    paymentMethod: 'PayPal',
+                    paymentDetails: data,
+                })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message);
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            toast.error('Payment processing failed');
+        }
+    };
 
     return (
         <section className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 flex justify-center items-center relative">
@@ -226,13 +226,13 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                             clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID!,
                                             currency: "USD",
                                             intent: "capture",
-                                            enableFunding: "card",
-                                            disableFunding: "paylater"
+                                            components: "buttons"
                                         }}
                                     >
                                         <div className="mt-4">
                                             {payment && getRemainingTime(payment).status !== 'expired' ? (
                                                 <PayPalButtons
+                                                    fundingSource={undefined}
                                                     style={{
                                                         layout: "vertical",
                                                         shape: "rect",
@@ -241,39 +241,23 @@ export default function PaymentDetails({ slug }: { slug: string }) {
                                                     createOrder={(data, actions) => {
                                                         return actions.order.create({
                                                             intent: "CAPTURE",
-                                                            application_context: {
-                                                                return_url: `${process.env.NEXT_PUBLIC_URL}/payment/success`,
-                                                                cancel_url: `${process.env.NEXT_PUBLIC_URL}/payment/cancel`
-                                                            },
                                                             purchase_units: [{
                                                                 amount: {
                                                                     value: usdAmount,
                                                                     currency_code: "USD"
-                                                                },
-                                                                description: payment.title
+                                                                }
                                                             }]
                                                         });
                                                     }}
                                                     onApprove={async (data, actions) => {
                                                         if (!actions.order) return;
-                                                        try {
-                                                            const details = await actions.order.capture();
-                                                            console.log('Transaction completed:', details);
-                                                            if (details.status === "COMPLETED") {
-                                                                toast.success('Payment successful!');
-                                                                await handlePaypalPayment(data);
-                                                            }
-                                                        } catch (error) {
-                                                            console.error('Payment failed:', error);
-                                                            toast.error('Payment failed. Please try again.');
-                                                        }
+                                                        const details = await actions.order.capture();
+                                                        console.log('Transaction completed:', details);
+                                                        toast.success('Payment successful!');
+                                                        await handlePaypalPayment(data);
                                                     }}
                                                 />
-                                            ) : (
-                                                <div className="text-red-500">
-                                                    Payment period has expired
-                                                </div>
-                                            )}
+                                            ) : null}
                                         </div>
                                     </PayPalScriptProvider>
                                 )}
